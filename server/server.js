@@ -99,9 +99,9 @@ app.get('/api/similar', async (req, res) => {
   i++;
   }
 
+
   db.prepare('INSERT INTO cache (song, artist, similar_songs) VALUES (?, ?, ?)').run(song, artist,JSON.stringify(result) );
 
-  console.log("api")
 
   return res.json(result)
   //res.json(data)
@@ -111,8 +111,16 @@ catch(error){
 }}
 else{
     res.json(JSON.parse(row.similar_songs))
-    console.log("cache")
 }
+});
+app.get('/api/preview',async(req,res)=>{
+  const {song,artist}=req.query;
+  const response=await fetch(`https://itunes.apple.com/search?term=${song}+${artist}&media=music&limit=1`)
+  const data=await response.json();
+  if(!data.results[0]){
+    return res.status(404).json({error:"song file not found"})
+  }
+  return res.json( data.results[0].previewUrl)
 });
 app.listen(3000,()=>{
     console.log('Server running on port 3000');
