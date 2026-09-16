@@ -1,23 +1,129 @@
 const express=require('express');
 const Database = require('better-sqlite3');
 const cors = require('cors');
+const session = require('express-session');
+const bcrypt = require('bcrypt');
 require('dotenv').config();
+
 const app=express();
-app.use(cors());
+
+app.use(cors({
+    origin: 'http://localhost:5173', 
+    credentials: true 
+}));
+
+app.use(express.json());
+
+app.use(session({
+    secret: process.env.SECRET_PASSWORD, 
+    resave: false, 
+    saveUninitialized: false, 
+    cookie: { 
+        secure: false,
+        httpOnly: true, 
+        maxAge: 1000 * 60 * 60 * 24
+    }
+}));
+
 const db=new Database('cache.db');
 
 db.exec(`CREATE TABLE IF NOT EXISTS cache(
-    song TEXT,artist TEXT,similar_songs TEXT,UNIQUE(song,artist))
-    `)
+    song TEXT,
+    artist TEXT,
+    similar_songs TEXT,
+    UNIQUE(song,artist)
+)`);
+
+db.exec(`CREATE TABLE IF NOT EXISTS users(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL
+)`);
+
+db.exec(`CREATE TABLE IF NOT EXISTS saved_searches(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    song TEXT NOT NULL,
+    artist TEXT NOT NULL,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+)`);  
+
+app.post('/api/signup', async (req, res) => {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+        return res.status(400).json({ error: 'Username and password required' });
+    }
+
+    try {
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+        const insert = db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)');
+        const info = insert.run(username, hashedPassword);
+        req.session.regenerate((err) => {
+          if (err) {
+            return res.status(500).json({ error: 'Login failed' });
+          }
+          req.session.userId = info.lastInsertRowid;
+          return res.json({ message: 'Signup successful', userId: info.lastInsertRowid });
+        });
+        
+    } catch (error) {
+        if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+            return res.status(400).json({ error: 'Username already taken' });
+        }
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.post('/api/login', async (req, res) => {
+    const { username, password } = req.body;
+
+    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+    
+    if (!user) {
+        return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    const match = await bcrypt.compare(password, user.password_hash);
+    
+    if (!match) {
+        return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    req.session.regenerate((err) => {
+    if (err) {
+        return res.status(500).json({ error: 'Login failed' });
+    }
+    req.session.userId = user.id;
+    return res.json({ message: 'Login successful', userId: user.id });
+  });
+});
+
+app.post('/api/logout', (req, res) => {
+    req.session.destroy((err) => {
+        if (err) {
+            return res.status(500).json({ error: 'Could not log out' });
+        }
+        res.clearCookie('connect.sid');
+        return res.json({ message: 'Logged out' });
+    });
+});
+
+app.post('/api/saved-searches',(req,res)=>{
+  if (!req.session.userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const {song,artist}=req.body;
+  db.prepare('INSERT INTO saved_searches (user_id,song, artist) VALUES (?, ?, ?)').run(req.session.userId,song, artist);
+  return res.json({message:'Successfully saved search'})
+
+})
 
 app.get('/',(req,res)=>{
     res.send('Server is alive');
 })
-
-app.get('/test', (req, res) => {
-  const name=req.query.name;
-  res.send(`Welcome,${name}`)
-});
 
 app.get('/api/similar', async (req, res) => {
   const { song, artist } = req.query;
@@ -99,9 +205,11 @@ app.get('/api/similar', async (req, res) => {
   i++;
   }
 
+  if (result.length === 0) {
+    return res.status(404).json({ error: 'No similar songs found.' });
+  }
 
   db.prepare('INSERT INTO cache (song, artist, similar_songs) VALUES (?, ?, ?)').run(song, artist,JSON.stringify(result) );
-
 
   return res.json(result)
   //res.json(data)
@@ -113,6 +221,15 @@ else{
     res.json(JSON.parse(row.similar_songs))
 }
 });
+
+app.get('/api/saved-searches',async (req,res)=>{
+  if(!req.session.userId){
+    return res.status(401).json({error:'Unauthorized'})
+  }
+  const userSearches = db.prepare('SELECT id, song, artist FROM saved_searches WHERE user_id = ?').all(req.session.userId);
+  return res.json(userSearches);
+});
+
 app.get('/api/preview',async(req,res)=>{
   const {song,artist}=req.query;
   const response=await fetch(`https://itunes.apple.com/search?term=${song}+${artist}&media=music&limit=1`)
@@ -122,6 +239,35 @@ app.get('/api/preview',async(req,res)=>{
   }
   return res.json( data.results[0].previewUrl)
 });
+
+app.delete('/api/saved-searches/:id', (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const searchId = req.params.id;
+  
+  const result = db.prepare('DELETE FROM saved_searches WHERE id = ? AND user_id = ?').run(searchId, req.session.userId);
+  
+  if (result.changes === 0) {
+    return res.status(404).json({ error: 'Search not found or not yours' });
+  }
+
+  return res.json({ message: 'Deleted successfully' });
+});
+
+
+app.delete('/api/saved-searches', (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  db.prepare('DELETE FROM saved_searches WHERE user_id = ?').run(req.session.userId);
+  
+  return res.json({ message: 'History cleared' });
+});
+
+
 app.listen(3000,()=>{
     console.log('Server running on port 3000');
 })
