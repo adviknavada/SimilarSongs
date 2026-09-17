@@ -15,13 +15,15 @@ app.use(cors({
 
 app.use(express.json());
 
+app.set('trust proxy', 1);
 app.use(session({
     secret: process.env.SECRET_PASSWORD, 
     resave: false, 
     saveUninitialized: false, 
     cookie: { 
-        secure: false,
+        secure: true,
         httpOnly: true, 
+        sameSite: 'none',
         maxAge: 1000 * 60 * 60 * 24
     }
 }));
@@ -57,7 +59,6 @@ function checkCacheAndAttach(req, res, next) {
     }
     next();
 }
-
 const ipLoginLimiter = rateLimit({
     windowMs: 10 * 60 * 1000,
     max: 20,
