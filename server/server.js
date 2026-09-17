@@ -9,7 +9,7 @@ require('dotenv').config();
 const app=express();
 
 app.use(cors({
-    origin: 'https://similar-songs-pi.vercel.app/', 
+    origin: 'https://similar-songs-xk54.vercel.app/', 
     credentials: true 
 }));
 
