@@ -3,6 +3,7 @@ const Database = require('better-sqlite3');
 const cors = require('cors');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
+const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
 const app=express();
@@ -46,7 +47,38 @@ db.exec(`CREATE TABLE IF NOT EXISTS saved_searches(
     song TEXT NOT NULL,
     artist TEXT NOT NULL,
     FOREIGN KEY(user_id) REFERENCES users(id)
-)`);  
+)`); 
+
+function checkCacheAndAttach(req, res, next) {
+    const { song, artist } = req.query;
+    if (song && artist) {
+        const cached = db.prepare('SELECT * FROM cache WHERE song = ? AND artist = ?').get(song, artist);
+        req.cacheHit = cached;
+    }
+    next();
+}
+
+const ipLoginLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000,
+    max: 20,
+    keyGenerator: (req) => req.ip,
+    message: { error: 'Too many login attempts from this IP, try again later' }
+});
+
+const usernameLoginLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000,
+    max: 5,
+    keyGenerator: (req) => req.body.username || 'unknown',
+    message: { error: 'Too many attempts for this account, try again later' }
+});
+
+const apiLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000,
+    max: 30,
+    keyGenerator: (req) => req.ip,
+    skip: (req) => Boolean(req.cacheHit),
+    message: { error: 'Too many searches, try again later' }
+});
 
 app.post('/api/signup', async (req, res) => {
     const { username, password } = req.body;
@@ -77,7 +109,7 @@ app.post('/api/signup', async (req, res) => {
     }
 });
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', ipLoginLimiter, usernameLoginLimiter,async (req, res) => {
     const { username, password } = req.body;
 
     const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
@@ -125,9 +157,12 @@ app.get('/',(req,res)=>{
     res.send('Server is alive');
 })
 
-app.get('/api/similar', async (req, res) => {
+app.get('/api/similar', checkCacheAndAttach,apiLimiter, async (req, res) => {
   const { song, artist } = req.query;
 
+  if(req.cacheHit){
+    return res.json(JSON.parse(req.cacheHit.similar_songs));
+  }
 
   if(!song&&!artist){
     return res.status(400).json({error:'atleast one of song and artist needed'})
