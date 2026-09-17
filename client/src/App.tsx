@@ -39,7 +39,7 @@ function App() {
 
   const fetchSavedSearches = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/saved-searches', {
+      const response = await fetch('https://similarsongs-iiuy.onrender.com/api/saved-searches', {
         credentials: 'include'
       });
       if (response.ok) {
@@ -53,7 +53,7 @@ function App() {
 
   const handleDeleteSearch = async (id: number) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/saved-searches/${id}`, {
+      const response = await fetch(`https://similarsongs-iiuy.onrender.com/api/saved-searches/${id}`, {
         method: 'DELETE',
         credentials: 'include'
       });
@@ -71,7 +71,7 @@ function App() {
     if (!window.confirm('Are you sure you want to clear your entire search history?')) return;
 
     try {
-      const response = await fetch('http://localhost:3000/api/saved-searches', {
+      const response = await fetch('https://similarsongs-iiuy.onrender.com/api/saved-searches', {
         method: 'DELETE',
         credentials: 'include'
       });
@@ -88,7 +88,7 @@ function App() {
     setAuthError('');
     try {
       const endpoint = authMode === 'login' ? '/api/login' : '/api/signup';
-      const response = await fetch(`http://localhost:3000${endpoint}`, {
+      const response = await fetch(`https://similarsongs-iiuy.onrender.com${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: authUsername, password: authPassword }),
@@ -112,7 +112,7 @@ function App() {
 
   const handleLogout = async () => {
     try {
-      await fetch('http://localhost:3000/api/logout', { 
+      await fetch('https://similarsongs-iiuy.onrender.com/api/logout', { 
         method: 'POST',
         credentials: 'include'
       });
@@ -135,7 +135,7 @@ function App() {
     if (searchArtist) params.append('artist', searchArtist);
 
     try {
-      const response = await fetch(`http://localhost:3000/api/similar?${params.toString()}`, {
+      const response = await fetch(`https://similarsongs-iiuy.onrender.com/api/similar?${params.toString()}`, {
         credentials: 'include'
       });
       const data = await response.json();
@@ -154,7 +154,7 @@ function App() {
         );
 
         if (!alreadySaved) {
-          fetch('http://localhost:3000/api/saved-searches', {
+          fetch('https://similarsongs-iiuy.onrender.com/api/saved-searches', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ song: searchSong, artist: searchArtist }),
@@ -173,7 +173,7 @@ function App() {
   const handlePlay = async (trackSong: string, trackArtist: string) => {
     try {
       const params = new URLSearchParams({ song: trackSong, artist: trackArtist });
-      const response = await fetch(`http://localhost:3000/api/preview?${params.toString()}`);
+      const response = await fetch(`https://similarsongs-iiuy.onrender.com/api/preview?${params.toString()}`);
       const data = await response.json();
 
       if (data.error) {
