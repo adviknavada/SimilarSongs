@@ -4,10 +4,13 @@ const cors = require('cors');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
 const rateLimit = require('express-rate-limit');
+const { createClient } = require('redis');
+const RedisStore = require('connect-redis').default;
 require('dotenv').config();
 
 const app=express();
-
+const redisClient = createClient({ url: process.env.REDIS_URL });
+redisClient.connect().catch(console.error);
 app.use(cors({
     origin: 'https://similar-songs-xk54.vercel.app', 
     credentials: true 
@@ -17,6 +20,7 @@ app.use(express.json());
 
 app.set('trust proxy', 1);
 app.use(session({
+    store: new RedisStore({ client: redisClient }),
     secret: process.env.SECRET_PASSWORD, 
     resave: false, 
     saveUninitialized: false, 
