@@ -20,6 +20,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
     "express-session": "^1.19.0",
+    "morgan": "^1.12.1",
     "redis": "^6.2.1"
   }
 }

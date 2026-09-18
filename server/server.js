@@ -6,9 +6,12 @@ const bcrypt = require('bcrypt');
 const rateLimit = require('express-rate-limit');
 const { createClient } = require('redis');
 const { RedisStore } = require('connect-redis');
+const morgan = require('morgan');
 require('dotenv').config();
 
 const app=express();
+
+app.use(morgan('dev'));
 
 const redisClient = createClient({ url: process.env.REDIS_URL });
 redisClient.connect().catch(console.error);
