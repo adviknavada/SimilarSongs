@@ -114,6 +114,7 @@ app.post('/api/signup', async (req, res) => {
         if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
             return res.status(400).json({ error: 'Username already taken' });
         }
+        console.error('Signup Error',error);
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -125,6 +126,7 @@ app.post('/api/login', ipLoginLimiter, usernameLoginLimiter,async (req, res) => 
     
     if (!user) {
         return res.status(401).json({ error: 'Invalid username or password' });
+      
     }
 
     const match = await bcrypt.compare(password, user.password_hash);
@@ -135,6 +137,7 @@ app.post('/api/login', ipLoginLimiter, usernameLoginLimiter,async (req, res) => 
 
     req.session.regenerate((err) => {
     if (err) {
+      console.error('Session Regeneration Error', err);
         return res.status(500).json({ error: 'Login failed' });
     }
     req.session.userId = user.id;
@@ -145,6 +148,7 @@ app.post('/api/login', ipLoginLimiter, usernameLoginLimiter,async (req, res) => 
 app.post('/api/logout', (req, res) => {
     req.session.destroy((err) => {
         if (err) {
+          console.error('Logout Error', err);
             return res.status(500).json({ error: 'Could not log out' });
         }
         res.clearCookie('connect.sid');
@@ -174,6 +178,7 @@ app.get('/api/similar', checkCacheAndAttach,apiLimiter, async (req, res) => {
   }
 
   if(!song&&!artist){
+    console.error('Both song and artist are missing in the request');
     return res.status(400).json({error:'atleast one of song and artist needed'})
   }
 
@@ -186,6 +191,7 @@ app.get('/api/similar', checkCacheAndAttach,apiLimiter, async (req, res) => {
     const result=[];
 
     if(!data.results.trackmatches.track[0]){
+      console.error('No tracks found for the given song:', song);
         return res.status(400).json({error:'song not valid'})
     }
 
@@ -200,7 +206,8 @@ app.get('/api/similar', checkCacheAndAttach,apiLimiter, async (req, res) => {
   return res.json(result)}
 
   catch{
-    return res.status(500).json({error:'error'})
+    console.error('Error fetching top tracks for song:', song);
+    return res.status(500).json({error:'Error'})
   }
   }
 
@@ -212,6 +219,7 @@ app.get('/api/similar', checkCacheAndAttach,apiLimiter, async (req, res) => {
     const result=[];
 
     if(!data.toptracks){
+      console.error('No top tracks found for the given artist:', artist);
         return res.status(400).json({error:'artist not valid'})
     }
 
@@ -226,6 +234,7 @@ app.get('/api/similar', checkCacheAndAttach,apiLimiter, async (req, res) => {
   return res.json(result)}
 
   catch{
+    console.error('Error fetching top tracks for artist:', artist);
     return res.status(500).json({error:'error'})
   }
 
@@ -239,6 +248,7 @@ app.get('/api/similar', checkCacheAndAttach,apiLimiter, async (req, res) => {
   const data = await response.json();
 
   if(data.error){
+    console.error('Error fetching similar tracks:', data.message);
     return res.status(404).json({error:'song not found'})
   }
   const result=[];
@@ -250,6 +260,7 @@ app.get('/api/similar', checkCacheAndAttach,apiLimiter, async (req, res) => {
   }
 
   if (result.length === 0) {
+    console.error('No similar songs found for:', song, 'by', artist);
     return res.status(404).json({ error: 'No similar songs found.' });
   }
 
@@ -259,6 +270,7 @@ app.get('/api/similar', checkCacheAndAttach,apiLimiter, async (req, res) => {
   //res.json(data)
 }
 catch(error){
+  console.error('Error fetching similar tracks:', error);
     return res.status(500).json({error:'internal server error'})
 }}
 else{
@@ -279,6 +291,7 @@ app.get('/api/preview',async(req,res)=>{
   const response=await fetch(`https://itunes.apple.com/search?term=${song}+${artist}&media=music&limit=1`)
   const data=await response.json();
   if(!data.results[0]){
+    console.error('No preview found for song:', song, 'by artist:', artist);
     return res.status(404).json({error:"song file not found"})
   }
   return res.json( data.results[0].previewUrl)
@@ -286,6 +299,7 @@ app.get('/api/preview',async(req,res)=>{
 
 app.delete('/api/saved-searches/:id', (req, res) => {
   if (!req.session.userId) {
+    console.error('Unauthorized delete attempt for search ID:', req.params.id); 
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -294,6 +308,7 @@ app.delete('/api/saved-searches/:id', (req, res) => {
   const result = db.prepare('DELETE FROM saved_searches WHERE id = ? AND user_id = ?').run(searchId, req.session.userId);
   
   if (result.changes === 0) {
+    console.error('Delete failed for search ID:', searchId, 'User ID:', req.session.userId);
     return res.status(404).json({ error: 'Search not found or not yours' });
   }
 
@@ -303,6 +318,7 @@ app.delete('/api/saved-searches/:id', (req, res) => {
 
 app.delete('/api/saved-searches', (req, res) => {
   if (!req.session.userId) {
+    console.error('Unauthorized attempt to clear saved searches');
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
